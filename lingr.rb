@@ -17,6 +17,7 @@ require "net/http"
 require "thread"
 require 'strscan'
 require 'time'
+require 'uri'
 
 class Lingr
     def initialize(params = {})
@@ -116,7 +117,7 @@ class Lingr
             options["complete"] ||= lambda{|json,lingr|}
             options["observe"] ||= false
             params["callback"] = "foo"
-            req = Net::HTTP::Get.new("/api"+path+"?"+params.map{|k,v| "#{k}=#{v}" }.join("&"))
+            req = Net::HTTP::Get.new("/api"+path+"?"+URI.escape(params.map{|k,v| "#{k}=#{v}" }.join("&")))
 
             unless @session_id.nil?
                 req['Cookie'] = @cookie_key+"="+@session_id
@@ -230,10 +231,13 @@ class Lingr
             },{
                 "success" => lambda{|json,lingr|
                 json["rooms"].each do |n|
+                    if n["room"]["id"] != "_"
+                    puts "debug: rooms loop #{n["room"]["id"]}" if lingr.debug
                     r = n["room"]["roster"]
                     members = []
                     mem = []
                     r["members"].each do |m|
+                        puts "debug: members loop #{m["username"]}" if lingr.debug
                         members << Member.new(
                             :nickname => m["name"],
                             :username => m["username"],
@@ -246,11 +250,14 @@ class Lingr
                     messages = []
                     n["room"]["messages"].each do |n|
                         m = n["message"]
+                        puts "debug: message loop #{m["text"]}" if lingr.debug
                         unless m.nil?
                             messages << Message.new(
                                 :timestamp => Time.parse(m["timestamp"]),
                                 :text => m["text"],
-                                :user => members[mem.index(m["speaker_id"])]
+                                :username => m["speaker_id"],
+                                :nickname => m["nickname"],
+                                :icon_url => m["icon_url"]
                             )
                         end
                     end
@@ -262,7 +269,9 @@ class Lingr
                         :members => members,
                         :messages => messages
                     )
+                    end
                 end
+                puts "room loop end" if lingr.debug
                 lingr.events.add('room_show_complete',json)
             },
                 "failure" => lambda{|json,lingr|

@@ -81,6 +81,14 @@ class Lingr
                 l.room.observe
             end
         })
+        @events.register('observe_complete','boot',lambda{|e,l|
+            l.observe_thread = Thread.new{ l.room.observe }
+            l.observe_thread.join
+        })
+        @events.register('observe_failure','boot',lambda{|e,lingr|
+            lingr.c_error += 1
+            lingr.observe_thread = Thread.new{ sleep 2**lingr.c_error; lingr.room.observe }.join if lingr.booted
+        })
         puts "debug: event added" if @debug
         @session.start()
     end
@@ -340,7 +348,6 @@ class Lingr
                 "observe" => true,
                 "success" => lambda{|json,lingr|
                 @lingr.counter = [json["counter"],@lingr.counter].max unless json["counter"].nil?
-                @lingr.events.add('observe_complete', json)
                 @lingr.c_error = 0
                 unless json["events"].nil?
                     ary = []
@@ -361,8 +368,10 @@ class Lingr
                     ary2 = []
                     json["events"].each do |m|
                         if m["message"].nil?
-                            n = m["offline"] if m["online"].nil?
-                            n = m["online"] if m["offline"].nil?
+                            onoff = true if m["presence"]["status"] == "online"
+                            onoff = false if m["presence"]["status"] == "offline"
+                            onoff ||= false
+                            n = m["presence"]
 
                             tmp = Message.new(
                                 :timestamp => Time.parse(n["timestamp"]),
@@ -371,16 +380,15 @@ class Lingr
                                 :username => n["username"],
                                 :text => n["text"],
                                 :room => n["room"],
-                                :presence => m["offline"].nil?
+                                :presence => onoff                                
                             )
                             ary2 << tmp
                         end
                     end
                     @lingr.events.add('status_changed',ary2) if ary2.length > 0
                 end
-                lingr.observe_thread = Thread.new{ lingr.room.observe }
-                lingr.observe_thread.join
-            },
+                @lingr.events.add('observe_complete', json)
+           },
                 "failure" => lambda{|json,lingr|
                 lingr.events.add('observe_failure', json)
                 lingr.c_error += 1
@@ -507,11 +515,11 @@ class Lingr
     
     class Message
         def initialize(hash = {})
-            @timestamp = hash[:timestamp] || nil
-            @text = hash[:text] || nil
+            @timestamp = hash[:timestamp]
+            @text = hash[:text]
             @presence = hash[:presence]
             @presence = true if @presence.nil?
-            @room = hash[:room] || nil
+            @room = hash[:room]
             if hash[:user].nil?
                 @user = Member.new(
                     :nickname => hash[:nickname],
@@ -528,22 +536,22 @@ class Lingr
 
     class Member
         def initialize(hash = {})
-            @nickname = hash[:nickname] || nil
-            @username = hash[:username] || nil
-            @icon_url = hash[:icon_url] || nil
+            @nickname = hash[:nickname]
+            @username = hash[:username]
+            @icon_url = hash[:icon_url]
             @presence = hash[:presence]
-            @presence = true if @member.nil?
-            @owner = hash[:owner] || nil
+            @presence = true if @presence.nil?
+            @owner = hash[:owner]
         end
         attr_reader :nickname,:username,:icon_url,:presence,:owner
     end
 
     class Room
         def initialize(hash)
-            @my_public = hash[:public] || nil
-            @name = hash[:name] || nil
-            @id = hash[:id] || nil
-            @description = hash[:description] || nil
+            @my_public = hash[:public]
+            @name = hash[:name]
+            @id = hash[:id]
+            @description = hash[:description]
             @members = hash[:members] || []
             @messages = hash[:messages] || []
         end

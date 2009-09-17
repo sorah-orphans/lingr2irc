@@ -82,10 +82,12 @@ class Lingr
             end
         })
         @events.register('observe_complete','boot',lambda{|e,l|
+            puts "debug: observe_complete" if l.debug
             l.observe_thread = Thread.new{ l.room.observe }
             l.observe_thread.join
         })
         @events.register('observe_failure','boot',lambda{|e,lingr|
+            puts "debug: observe_failure. retry will #{2**lingr.c_error} seconds ago." if l.debug
             lingr.c_error += 1
             lingr.observe_thread = Thread.new{ sleep 2**lingr.c_error; lingr.room.observe }.join if lingr.booted
         })

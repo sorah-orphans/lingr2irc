@@ -15,13 +15,13 @@ loop do
         params = {}
         puts "accept"
         while buf = sock.gets.chomp
-            if /NICK (.+)/i =~ buf
+            if /^NICK (.+)/i =~ buf
                 params[:user] = $1
                 puts "user set"
-            elsif /PASS (.+)/i =~ buf
+            elsif /^PASS (.+)/i =~ buf
                 params[:password] = $1
                 puts "pass set"
-            elsif /USER/i =~ buf
+            elsif /^USER/i =~ buf
                 puts "boot"
                 l = Lingr.new(params)
                 p l
@@ -50,7 +50,8 @@ loop do
                 l.events.register('new_message','ircg',lambda{|e,s,l|
                     puts "new message"
                     e.each do |n|
-                        sock.puts ":#{n.user.username} PRIVMSG ##{n.room} :#{n.text}" if params[:user] != n.user.username
+                        p n
+                        p s.puts ":#{n.user.username} PRIVMSG ##{n.room} :#{n.text}" if params[:user] != n.user.username
                     end
                 },sock)
                 l.events.register('status_changed','ircg',lambda{|e,s,l|
@@ -67,12 +68,12 @@ loop do
                 Thread.new do
                     l.boot
                 end
-            elsif /QUIT/i =~ buf
+            elsif /^QUIT/i =~ buf
                 puts "shutdown"
                 l.shutdown
                 sock.close
                 Thread.exit
-            elsif /PRIVMSG #(.+) :(.+)/i =~ buf
+            elsif /^PRIVMSG #(.+) :(.+)/i =~ buf
                 puts "say"
                 l.say($1,$2)
             end
